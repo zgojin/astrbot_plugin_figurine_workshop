@@ -1,3 +1,6 @@
+# 因gemini2.0img画图模型弃用，该模型已失效
+
+
 # 手办工坊 (Figurine Workshop)
 
 一个基于 Google Gemini API 的 AstrBot 插件，可以将任意图片一键“手办化”，生成精美的二次元手办风格图片。
