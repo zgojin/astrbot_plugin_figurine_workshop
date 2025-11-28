@@ -100,8 +100,8 @@ class ImageWorkflow:
 @register(
     "astrbot_plugin_figurine_workshop",
     "长安某",
-    "使用 Gemini API 将图片手办化",
-    "1.0.0",
+    "使用 Gemini 2.5/3.0 进行图片风格化（手办/Galgame/Cos化/双V）",
+    "1.3.4",
 )
 class LMArenaPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
@@ -116,70 +116,117 @@ class LMArenaPlugin(Star):
         self.api_base_url = self.conf.get(
             "api_base_url", "https://generativelanguage.googleapis.com"
         )
+        # 默认模型
+        self.gemini_model = self.conf.get("gemini_model", "gemini-2.5-flash-image")
+        # 手办化的默认风格
         self.figurine_style = self.conf.get("figurine_style", "deluxe_box")
+        
         if not self.api_keys:
             logger.error("LMArenaPlugin: 未配置任何 Gemini API 密钥")
 
     async def initialize(self):
         self.iwf = ImageWorkflow()
 
-    @filter.regex(r"^(手办化)", priority=3)
-    async def on_nano(self, event: AstrMessageEvent):
+    # 修改点 1: 在正则中将 galgame 改为 !galgame
+    @filter.regex(r"(?i)^(手办化|cos化|!galgame|双v)", priority=3)
+    async def on_generate_request(self, event: AstrMessageEvent):
+        """
+        统一处理所有图片生成请求
+        """
+        # 1. 确定触发指令
+        msg_str = event.message_obj.message_str.strip()
+        
+        # 修改点 2: 再次匹配提取分组时，也将 galgame 改为 !galgame
+        trigger_match = re.match(r"(?i)^(手办化|!galgame|cos化|双v)", msg_str)
+        if not trigger_match:
+            return
+        
+        raw_command = trigger_match.group(1)
+        # 统一转为小写进行逻辑判断
+        command_lower = raw_command.lower()
+        
+        # 2. 获取图片
         img_bytes = await self.iwf.get_first_image(event)
         if not img_bytes:
             yield event.plain_result("缺少图片参数（可以发送图片或@用户）")
             return
 
-        user_prompt = re.sub(
-            r"^(手办化)\s*", "", event.message_obj.message_str, count=1
+        user_input_text = re.sub(
+            r"(?i)^(手办化|!galgame|cos化|双v)\s*", "", msg_str, count=1
         ).strip()
-        yield event.plain_result(
-            f"正在生成 [{self.figurine_style}] 风格手办，请稍等..."
-        )
-        res = await self._generate_figurine_with_gemini(img_bytes, user_prompt)
 
+        prompt_key = ""
+        final_prompt = ""
+        prompts_config = self.conf.get("prompts", {})
+
+        if command_lower == "手办化":
+            prompt_key = self.figurine_style # 使用配置中的默认手办风格
+            base_prompt = prompts_config.get(prompt_key, "")
+            style_display_name = f"手办化-{prompt_key}"
+
+        # 判断条件匹配 !galgame
+        elif command_lower == "!galgame":
+            prompt_key = "galgame"
+            base_prompt = prompts_config.get(prompt_key, "")
+            style_display_name = "Galgame"
+
+        elif command_lower == "cos化":
+            prompt_key = "cosplay"
+            base_prompt = prompts_config.get(prompt_key, "")
+            style_display_name = "Cos化"
+        
+        elif command_lower == "双v":
+            prompt_key = "double_v"
+            base_prompt = prompts_config.get(prompt_key, "")
+            style_display_name = "双V模式"
+
+        else:
+             return
+
+        if not base_prompt:
+             yield event.plain_result(f"配置错误：找不到 key 为 '{prompt_key}' 的提示词。")
+             return
+
+        # 统一将用户输入作为附加要求添加到提示词后
+        final_prompt = (
+            f"{base_prompt}\n\nAdditional user requirements: {user_input_text}"
+            if user_input_text
+            else base_prompt
+        )
+
+        yield event.plain_result("正在请求，请稍后...")
+        
+        logger.info(f"Gemini 生成 Prompt ({style_display_name}): {final_prompt[:100]}...") 
+
+        res = await self._generate_with_gemini(img_bytes, final_prompt)
+
+        safe_prefix = command_lower.replace("!", "")
+        
         if isinstance(res, bytes):
             yield event.chain_result([Image.fromBytes(res)])
             if self.save_image:
-                save_path = (
-                    self.plugin_data_dir
-                    / f"gemini_{self.figurine_style}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.png"
-                )
-
-                def write_file():
-                    with save_path.open("wb") as f:
-                        f.write(res)
-
-                loop = asyncio.get_running_loop()
-                await loop.run_in_executor(None, write_file)
-
+                self._save_image_to_disk(res, safe_prefix)
         elif isinstance(res, str):
             yield event.plain_result(f"生成失败: {res}")
         else:
             yield event.plain_result("生成失败，发生未知错误。")
 
-    async def _generate_figurine_with_gemini(
-        self, image_bytes: bytes, user_prompt: str
-    ) -> bytes | str | None:
-        prompts_config = self.conf.get("prompts", {})
-        base_prompt = prompts_config.get(self.figurine_style)
-
-        if not base_prompt:
-            error_msg = (
-                f"配置错误：未能在配置文件中找到名为 '{self.figurine_style}' 的提示词。"
-            )
-            logger.error(error_msg)
-            return error_msg
-
-        final_prompt = (
-            f"{base_prompt}\n\nAdditional user requirements from user: {user_prompt}"
-            if user_prompt
-            else base_prompt
+    def _save_image_to_disk(self, img_bytes: bytes, prefix: str):
+        save_path = (
+            self.plugin_data_dir
+            / f"gemini_{prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.png"
         )
-        logger.info(f"Gemini 手办化 Prompt ({self.figurine_style}): {final_prompt}")
+        def write_file():
+            with save_path.open("wb") as f:
+                f.write(img_bytes)
+        asyncio.get_running_loop().run_in_executor(None, write_file)
 
+    async def _generate_with_gemini(
+        self, image_bytes: bytes, prompt: str
+    ) -> bytes | str | None:
+        
         async def edit_operation(api_key):
-            model_name = "gemini-2.0-flash-preview-image-generation"
+            model_name = self.gemini_model
             image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
             payload = {
@@ -187,7 +234,7 @@ class LMArenaPlugin(Star):
                     {
                         "role": "user",
                         "parts": [
-                            {"text": final_prompt},
+                            {"text": prompt},
                             {
                                 "inlineData": {
                                     "mimeType": "image/png",
@@ -203,7 +250,7 @@ class LMArenaPlugin(Star):
 
         image_data = await self._with_retry(edit_operation)
         if not image_data:
-            return "所有API密钥均尝试失败"
+            return "所有API密钥均尝试失败或模型未返回图片"
         return image_data
 
     def _get_current_key(self):
@@ -244,6 +291,8 @@ class LMArenaPlugin(Star):
             for part in data["candidates"][0]["content"]["parts"]:
                 if "inlineData" in part and "data" in part["inlineData"]:
                     return base64.b64decode(part["inlineData"]["data"])
+            
+            logger.warning(f"Gemini 响应中未包含图片数据。Raw Parts: {data['candidates'][0]['content']['parts']}")
 
         raise Exception("操作成功，但未在响应中获取到图片数据")
 
