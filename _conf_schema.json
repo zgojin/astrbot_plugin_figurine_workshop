@@ -13,7 +13,7 @@
     "api_base_url": {
         "description": "Gemini API 基础 URL (可选)",
         "type": "string",
-        "hint": "如果需要自定义 API 地址或使用代理，请填写完整 URL",
+        "hint": "如果需要自定义 API 地址或使用代理，请填写完整 URL，例：https://gemini.my996.top",
         "default": "https://generativelanguage.googleapis.com"
     },
     "gemini_model": {
@@ -86,3 +86,4 @@
         }
     }
 }
+
