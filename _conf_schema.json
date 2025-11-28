@@ -16,14 +16,25 @@
         "hint": "如果需要自定义 API 地址或使用代理，请填写完整 URL",
         "default": "https://generativelanguage.googleapis.com"
     },
+    "gemini_model": {
+        "description": "Gemini 模型名称",
+        "type": "string",
+        "options": [
+            "gemini-2.5-flash-image",
+            "gemini-2.5-flash-image-preview",
+            "gemini-3-pro-image-preview"
+        ],
+        "hint": "指定用于生图的模型版本。",
+        "default": "gemini-2.5-flash-image"
+    },
     "figurine_style": {
-        "description": "模型化风格",
+        "description": "手办化默认风格",
         "type": "string",
         "options": [
             "deluxe_box",
             "classic"
         ],
-        "hint": "选择生成的图片风格：'deluxe_box' (包装盒版) 或 'classic' (经典版)",
+        "hint": "选择【手办化】指令的默认风格：'deluxe_box' (包装盒版) 或 'classic' (经典版)",
         "default": "deluxe_box"
     },
     "save_image": {
@@ -33,25 +44,45 @@
         "default": true
     },
     "prompts": {
-        "description": "自定义不同风格的生成提示词",
+        "description": "自定义不同功能的生成提示词",
         "type": "object",
-        "hint": "选择不同的生成风格",
+        "hint": "定义各个功能的具体提示词内容",
         "items": {
             "deluxe_box": {
-                "description": "包装盒版提示词",
+                "description": "手办化-包装盒版 提示词",
                 "type": "text",
                 "editor_mode": true,
                 "editor_language": "markdown",
                 "default": "Your primary mission is to convert the subject from the user's photo into a **photorealistic, ultra-high-resolution miniature figure**, presented in its commercial packaging.  \nThe result must be **sharp, crystal-clear, and professional product photography quality**, with **no blurriness or distortion**.\n\n**Core Directive: Subject Analysis & Priority Assignment (CRITICAL FIRST STEP)**  \n1. Identify the subject of the image.  \n2. Apply the correct rule set:  \n\n* **RULE SET A - Person, creature, or animal:**  \n   - **If a face is visible:** Your top priority is **Likeness**. Render the face in sharp detail, with accurate proportions.  \n   - **If NO face is visible (e.g., back view):** Your top priority is **Pose and Form Fidelity**. **Do NOT invent or add a face** — faithfully preserve the back-view pose from the source photo.  \n\n* **RULE SET B - Vehicle:** Prioritize exact **Form, Proportions, Surface Finish, and Key Details**.  \n\n* **RULE SET C - Building/structure:** Prioritize **Architectural Integrity** (geometry, materials, fine details).  \n\n**Scene Details:**  \n1. **The Model:** The miniature figure must be **highly detailed, sharp, and exactly match the pose from the input photo**.  \n2. **The Base:** A clean, simple display base.  \n3. **The Packaging:** Behind the model, show a collector’s style box featuring the subject.  \n4. **Environment:** A professional, well-lit indoor studio setting, **sharp focus, no blur, no noise**."
             },
             "classic": {
-                "description": "经典版提示词",
+                "description": "手办化-经典版 提示词",
                 "type": "text",
                 "editor_mode": true,
                 "editor_language": "markdown",
                 "default": "Your primary mission is to convert the subject from the user's photo into a **photorealistic, ultra-high-resolution miniature model**, displayed in a realistic studio/workshop setting.  \nThe result must be **pin-sharp, crystal clear, and professional-grade**, with **no blur, no distortion, and no random changes in pose**.\n\n**Core Directive: Subject Analysis & Priority Assignment (CRITICAL FIRST STEP)**  \n1. Identify the subject of the image.  \n2. Apply the correct rule set:  \n\n* **RULE SET A - Person, creature, or animal:**  \n   - **If a face is visible:** Prioritize **Character Fidelity and Sharp Likeness**.  \n   - **If NO face is visible (e.g., back view):** Prioritize **Pose and Form Fidelity**.  \n     ⚠️ **Do NOT invent or fabricate a face**. Preserve the exact pose of the subject in the input photo.  \n\n* **RULE SET B - Vehicle:** Ensure perfect **Form, Proportions, Surface Finish, and Key Details** with **ultra-sharp clarity**.  \n\n* **RULE SET C - Building/structure:** Ensure **Architectural Integrity** with clear **geometry, materials, and fine details**, all rendered in **sharp focus**.  \n\n**Scene Composition (Strictly follow these details):**  \n1. **The Model:** The miniature model on a desk or workshop table, rendered in **ultra-sharp detail**, faithfully matching the input subject’s **pose and proportions**.  \n2. **Computer Monitor:** In the background, a monitor displays relevant 3D modeling software (ZBrush, Blender, CAD), showing the same subject. The screen must be **readable, crisp, not blurry**.  \n3. **Reference Material:** Next to the monitor, include a clear reference:  \n   - Artwork print for a character,  \n   - Blueprint/concept drawing for a vehicle,  \n   - Architectural drawing for a building.  \n   All references must appear **clear, sharp, and noise-free**.  \n4. **Environment:** A realistic, well-lit studio or office desk, with details like tools or keyboards, rendered in **professional product photography clarity**."
+            },
+            "galgame": {
+                "description": "Galgame 指令提示词",
+                "type": "text",
+                "editor_mode": true,
+                "editor_language": "markdown",
+                "default": "生成图片\n1.角色全身图，原图角色动作可变，背景为卧室。像素风格，slg互动游戏类型窗口，全部文字使用中文\n2.互动菜单如抚摸，揉捏，脱衣，对话，亲吻，道具，切换姿势，切换体位，SEX，选项拥有小图标，SEX的小图标为“❤️”。\n3.身体的各个部位有特写(sfw)，如胸部，臀部，手，大腿，嘴巴等且每个部位附有敏感度和调教等级。\n4.各种数值，如好感度，快感度，崩溃度，调教度……等等\n5.以及“当前关系∶亲密”。\n6.有对话框，角色名为“xxx”，角色简介(角色简介无需生成，只是为ai提供人物参考)∶xxx。 台词ai自拟，台词表达对user的爱意，对话格式举例∶“路人∶『你好』”"
+            },
+            "cosplay": {
+                "description": "Cos化 指令提示词",
+                "type": "text",
+                "editor_mode": true,
+                "editor_language": "markdown",
+                "default": "Generate a highly detailed photo of a human cosplaying this illustration, at Comiket. Exactly replicate the same pose, body posture, hand gestures, facial expression, and camera framing as in the original illustration. Keep the same angle, perspective, and composition, without any deviation"
+            },
+            "double_v": {
+                "description": "双V 指令提示词",
+                "type": "text",
+                "editor_mode": true,
+                "editor_language": "markdown",
+                "default": "人物呈蹲姿，双腿分开，双手在头部两侧比出“V”字手势，姿态较为活泼且具有张力。吐舌的表情增添了俏皮、可爱的风格，与整体的风格有反差感，显得较为灵动有趣。采用平视视角，镜头与人物处于同一水平高度，能够让观众与人物之间产生一种平等的视觉交流感，使人物形象更加亲近、真实。采用中心构图，人物位于画面正中央，这种构图方式可以将观众的注意力高度集中在人物身上，突出主体"
             }
         }
     }
 }
-
