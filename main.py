@@ -113,7 +113,7 @@ class ImageWorkflow:
     "astrbot_plugin_figurine_workshop",
     "长安某",
     "使用 Gemini 2.5/3.0 或 OpenAI 兼容 API 进行图片风格化（手办/Galgame/Cos化/双V）",
-    "1.4.0",
+    "1.4.1",
 )
 class LMArenaPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
@@ -391,8 +391,24 @@ class LMArenaPlugin(Star):
 
             img_matches = re.findall(r"!\[.*?\]\((.*?)\)", content)
             if img_matches:
-                logger.info(f"从响应中提取到 Markdown 图片链接: {img_matches[0]}")
-                return await self.iwf._download_image(img_matches[0])
+                image_url = img_matches[0]
+                
+                if image_url.strip().startswith("data:"):
+                    logger.info("从响应中提取到 Base64 图片数据，正在解码...")
+                    try:
+                        # data:image/png;base64,xxxxxx
+                        if "," in image_url:
+                            _, encoded_data = image_url.split(",", 1)
+                            return base64.b64decode(encoded_data)
+                        else:
+                            logger.error("Data 格式无法识别，请提交完整日志到issue")
+                            return None
+                    except Exception as e:
+                        logger.error(f"Base64 解码失败: {e}")
+                        return None
+
+                logger.info(f"从响应中提取到 Markdown 图片链接: {image_url}")
+                return await self.iwf._download_image(image_url)
 
             # 这里做一个比较宽泛的匹配，然后尝试下载
             url_matches = re.findall(r"(https?://[^\s\)]+)", content)
