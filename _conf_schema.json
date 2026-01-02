@@ -6,7 +6,7 @@
             "google",
             "openai"
         ],
-        "hint": "选择 'google' 使用原生 Gemini 协议；选择 'openai' 使用兼容协议（用于接入 OneAPI/NewAPI 等中转服务）",
+        "hint": "选择 'google' 使用原生 Gemini 协议；选择 'openai' 使用兼容协议",
         "default": "google"
     },
     "gemini_api_keys": {
@@ -23,7 +23,7 @@
     "api_base_url": {
         "description": "API 基础 URL (Base URL)",
         "type": "string",
-        "hint": "Google模式默认: https://generativelanguage.googleapis.com\nOpenAI: 或填写中转地址，例如 https://gemini.my996.top",
+        "hint": "Google模式默认: https://generativelanguage.googleapis.com",
         "default": "https://generativelanguage.googleapis.com"
     },
     "gemini_model": {
@@ -34,7 +34,6 @@
             "gemini-2.5-flash-image-preview",
             "gemini-3-pro-image-preview"
         ],
-        "hint": "指定用于生图的模型版本。",
         "default": "gemini-2.5-flash-image"
     },
     "figurine_style": {
@@ -44,13 +43,60 @@
             "deluxe_box",
             "classic"
         ],
-        "hint": "选择【手办化】指令的默认风格：'deluxe_box' (包装盒版) 或 'classic' (经典版)",
         "default": "deluxe_box"
     },
     "save_image": {
         "description": "是否保存生成的图片",
         "type": "bool",
-        "hint": "开启后，生成的图片会保存在插件的 data 目录中",
+        "default": true
+    },
+    "enable_private_chat": {
+        "description": "允许私聊使用",
+        "type": "bool",
+        "hint": "开启后允许在私聊中使用指令，关闭则只响应群聊",
+        "default": true
+    },
+    "group_mode": {
+        "description": "群聊响应模式",
+        "type": "string",
+        "options": [
+            "all",
+            "whitelist",
+            "blacklist"
+        ],
+        "hint": "all: 所有群生效; whitelist: 仅白名单群生效; blacklist: 黑名单群不生效",
+        "default": "all"
+    },
+    "group_whitelist": {
+        "description": "群聊白名单",
+        "type": "list",
+        "hint": "仅在 'whitelist' 模式下生效。填写群号。",
+        "items": {
+            "type": "string",
+            "description": "群号"
+        },
+        "default": []
+    },
+    "group_blacklist": {
+        "description": "群聊黑名单",
+        "type": "list",
+        "hint": "仅在 'blacklist' 模式下生效。填写群号。",
+        "items": {
+            "type": "string",
+            "description": "群号"
+        },
+        "default": []
+    },
+    "daily_limit": {
+        "description": "每人每日最大使用次数",
+        "type": "number",
+        "hint": "填写 0 表示无限制。超过次数后将拒绝生成。",
+        "default": 0
+    },
+    "show_quota_reminder": {
+        "description": "是否显示剩余次数提醒",
+        "type": "bool",
+        "hint": "开启后，将在回复中提示今日剩余可用次数",
         "default": true
     },
     "prompts": {
@@ -96,3 +142,4 @@
         }
     }
 }
+
