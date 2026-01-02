@@ -89,7 +89,7 @@
     },
     "daily_limit": {
         "description": "每人每日最大使用次数",
-        "type": "number",
+        "type": "int",
         "hint": "填写 0 表示无限制。超过次数后将拒绝生成。",
         "default": 0
     },
@@ -142,4 +142,5 @@
         }
     }
 }
+
 
