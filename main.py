@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import io
+import json
 import random
 import re
 from datetime import datetime
@@ -113,7 +114,7 @@ class ImageWorkflow:
     "astrbot_plugin_figurine_workshop",
     "长安某",
     "使用 Gemini 2.5/3.0 或 OpenAI 兼容 API 进行图片风格化（手办/Galgame/Cos化/双V）",
-    "1.4.1",
+    "1.5.1",
 )
 class LMArenaPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
@@ -123,6 +124,7 @@ class LMArenaPlugin(Star):
         self.plugin_data_dir = StarTools.get_data_dir(
             "astrbot_plugin_figurine_workshop"
         )
+        self.usage_file = self.plugin_data_dir / "daily_usage.json"
 
         # 兼容性配置
         self.api_type = self.conf.get("api_type", "google").lower()  # google 或 openai
@@ -136,22 +138,107 @@ class LMArenaPlugin(Star):
         # 手办化的默认风格
         self.figurine_style = self.conf.get("figurine_style", "deluxe_box")
 
+        # === 权限与配额配置 ===
+        self.enable_private_chat = self.conf.get("enable_private_chat", True)
+        self.group_mode = self.conf.get("group_mode", "all")
+        self.group_whitelist = set(str(x) for x in self.conf.get("group_whitelist", []))
+        self.group_blacklist = set(str(x) for x in self.conf.get("group_blacklist", []))
+        self.daily_limit = self.conf.get("daily_limit", 0)
+        self.show_quota_reminder = self.conf.get("show_quota_reminder", True)
+
         if not self.api_keys:
             logger.error("LMArenaPlugin: 未配置任何 API 密钥")
 
         logger.info(
-            f"LMArenaPlugin 加载完成: API类型={self.api_type}, 模型={self.gemini_model}"
+            f"LMArenaPlugin 加载完成: API类型={self.api_type}, 模型={self.gemini_model}, 每日限制={self.daily_limit}"
         )
 
     async def initialize(self):
         self.iwf = ImageWorkflow()
+
+    def _check_permission(self, event: AstrMessageEvent) -> bool:
+        """检查私聊开关和群组黑白名单"""
+        group_id = event.message_obj.group_id
+        
+        # 1. 检查私聊
+        if not group_id:
+            if not self.enable_private_chat:
+                return False
+            return True # 私聊开启且是私聊消息，直接通过
+
+        # 2. 检查群组
+        group_id = str(group_id)
+        if self.group_mode == "whitelist":
+            if group_id not in self.group_whitelist:
+                return False
+        elif self.group_mode == "blacklist":
+            if group_id in self.group_blacklist:
+                return False
+        
+        return True
+
+    def _load_usage_data(self) -> dict:
+        if not self.usage_file.exists():
+            return {"date": "", "counts": {}}
+        try:
+            return json.loads(self.usage_file.read_text(encoding='utf-8'))
+        except Exception:
+            return {"date": "", "counts": {}}
+
+    def _save_usage_data(self, data: dict):
+        try:
+            if not self.plugin_data_dir.exists():
+                self.plugin_data_dir.mkdir(parents=True)
+            self.usage_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
+        except Exception as e:
+            logger.error(f"保存配额数据失败: {e}")
+
+    def _check_and_update_quota(self, user_id: str) -> tuple[bool, int]:
+        """
+        检查并更新用户配额
+        返回: (是否允许, 剩余次数)
+        """
+        if self.daily_limit <= 0:
+            return True, 9999
+
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        data = self._load_usage_data()
+
+        # 如果日期变更，重置数据
+        if data.get("date") != today_str:
+            data = {"date": today_str, "counts": {}}
+        
+        counts = data.get("counts", {})
+        user_count = counts.get(user_id, 0)
+
+        if user_count >= self.daily_limit:
+            return False, 0
+        
+        # 通过，计数+1并保存
+        counts[user_id] = user_count + 1
+        data["counts"] = counts
+        self._save_usage_data(data)
+        
+        return True, self.daily_limit - (user_count + 1)
 
     @filter.regex(r"(?i)^(手办化|cos化|!galgame|双v)", priority=3)
     async def on_generate_request(self, event: AstrMessageEvent):
         """
         统一处理所有图片生成请求
         """
-        # 确定触发指令
+        # 权限检查
+        if not self._check_permission(event):
+            return
+
+        # 额度检查
+        sender_id = event.get_sender_id()
+        is_allowed, remaining_quota = self._check_and_update_quota(sender_id)
+        
+        if not is_allowed:
+            yield event.plain_result(f"今日使用次数已达上限 ({self.daily_limit}次)，请明天再来吧~")
+            return
+
+        # 触发指令
         msg_str = event.message_obj.message_str.strip()
 
         trigger_match = re.match(r"(?i)^(手办化|!galgame|cos化|双v)", msg_str)
@@ -172,33 +259,31 @@ class LMArenaPlugin(Star):
         ).strip()
 
         prompt_key = ""
+        base_prompt = ""
         final_prompt = ""
         prompts_config = self.conf.get("prompts", {})
 
         style_display_name = "未知风格"
-
         if command_lower == "手办化":
             prompt_key = self.figurine_style  # 使用配置中的默认手办风格
-            base_prompt = prompts_config.get(prompt_key, "")
             style_display_name = f"手办化-{prompt_key}"
 
         elif command_lower == "!galgame":
             prompt_key = "galgame"
-            base_prompt = prompts_config.get(prompt_key, "")
             style_display_name = "Galgame"
 
         elif command_lower == "cos化":
             prompt_key = "cosplay"
-            base_prompt = prompts_config.get(prompt_key, "")
             style_display_name = "Cos化"
 
         elif command_lower == "双v":
             prompt_key = "double_v"
-            base_prompt = prompts_config.get(prompt_key, "")
             style_display_name = "双V模式"
 
         else:
             return
+
+        base_prompt = prompts_config.get(prompt_key, "")
 
         if not base_prompt:
             yield event.plain_result(
@@ -213,7 +298,12 @@ class LMArenaPlugin(Star):
             else base_prompt
         )
 
-        yield event.plain_result("正在请求，请稍后...")
+        # 构造提示消息
+        quota_msg = ""
+        if self.daily_limit > 0 and self.show_quota_reminder:
+            quota_msg = f"\n(今日剩余次数: {remaining_quota})"
+
+        yield event.plain_result(f"正在请求，请稍后...{quota_msg}")
 
         logger.info(f"生成 Prompt ({style_display_name}): {final_prompt[:50]}...")
 
@@ -460,4 +550,4 @@ class LMArenaPlugin(Star):
     async def terminate(self):
         if self.iwf:
             await self.iwf.terminate()
-            logger.info("[ImageWorkflow] session已关闭")
+            logger.info("[figurine_workshop] session已关闭")
