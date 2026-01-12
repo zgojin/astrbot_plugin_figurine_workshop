@@ -395,13 +395,12 @@ class LMArenaPlugin(Star):
         }
 
         base_url = self.api_base_url.strip().removesuffix("/")
-        endpoint = (
-            f"{base_url}/v1beta/models/{model_name}:generateContent?key={api_key}"
-        )
+        endpoint = f"{base_url}/v1beta/models/{model_name}:generateContent"
         headers = {"Content-Type": "application/json"}
 
+        # 使用 params 参数传递 api_key，aiohttp 会自动进行 URL 编码
         async with self.iwf.session.post(
-            url=endpoint, json=payload, headers=headers
+            url=endpoint, json=payload, headers=headers, params={"key": api_key}
         ) as response:
             if response.status != 200:
                 response_text = await response.text()
